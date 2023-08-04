@@ -8,8 +8,49 @@ import xlsxwriter
 from GPUtil import GPUtil
 from numpy import mean
  
-file_dir_path = "D:/自动化整理/test/"
+file_dir_path = "C:/test/"
  
+import psutil
+import pynvml
+
+def line(n): #输出制定个数的横线
+    print("--"*n)
+
+# 获取CPU信息
+print("CPU信息")
+line(10)
+print("CPU逻辑数量:", psutil.cpu_count())  # CPU逻辑数量
+print("CPU物理核心:", psutil.cpu_count(logical=False))  # CPU物理核心
+print("CPU 使用率",psutil.cpu_percent(),"%")
+#print("cpu 状态",psutil.cpu_stats())
+line(10)
+
+# 获取内存信息
+print("获取内存信息")
+line(10)
+mem = psutil.virtual_memory()
+print("总内存:", mem.total/1024/1024, "MB")
+print("已用内存:", mem.used/1024/1024, "MB")
+print("空闲内存:", mem.free/1024/1024, "MB")  #or use print("空闲内存:",mem.available / 1024 / 1024, "MB")
+print("使用内存占比:", mem.percent)
+line(10)
+
+# 获取GPU信息
+print("GPU信息")
+line(10)
+
+pynvml.nvmlInit()
+handle=pynvml.nvml.nvmlDeviceGetHandleByIndex(0)
+gpu_name=pynvml.nvml.nvmlDeviceGetName(handle)
+gpu_mem=pynvml.nvml.nvmlDeviceGetMemoryInfo(handle)
+gpu_util=pynvml.nvml.nvmlDeviceGetUtilizationRates(handle)
+
+print("GPU名称:", gpu_name)  # GPU名称
+print("GPU 总显存：",gpu_mem.total/1024/1024, "MB")
+print("GPU 空闲显存：",gpu_mem.free/1024/1024, "MB")
+print("GPU 已用显存：",gpu_mem.used/1024/1024, "MB")
+print("GPU 利用率：",gpu_util.gpu)
+print("GPU 内存利用率：",gpu_util.memory)
  
 def ntid(process_name):
     """
@@ -30,11 +71,14 @@ def get_gpu_info():
     获取Gpu信息
     :return: 已用显存，显存占用率，Gpu利用率
     """
-    # GPUtil.showUtilization()
-    gpu = GPUtil.getGPUs()
-    print(gpu)
-    # print(gpu.memoryUsed, gpu.memoryUtil * 100, gpu.load * 100)
-    return gpu.memoryUsed, gpu.memoryUtil * 100, gpu.load * 100
+    pynvml.nvmlInit()
+    handle=pynvml.nvml.nvmlDeviceGetHandleByIndex(0)
+    gpu_name=pynvml.nvml.nvmlDeviceGetName(handle)
+    gpu_mem=pynvml.nvml.nvmlDeviceGetMemoryInfo(handle)
+    gpu_util=pynvml.nvml.nvmlDeviceGetUtilizationRates(handle)
+    mem_percent=gpu_mem.used/gpu_mem.total
+    
+    return gpu_mem.used/1024/1024, mem_percent*100, gpu_util.gpu
  
  
 def check_exsit(process_name):
@@ -51,35 +95,39 @@ def check_exsit(process_name):
         return False
  
  
-def monitor_process(pid, interval=0.5):
+def monitor_process(pid, interval):
     """
     抓取指定进程的CPU、内存信息
     :param pid: 进程id
     :param interval: 抓取间隔
     :return:
     """
-    p = psutil.Process(pid)
+    
     print("start_time: ", time.strftime('%m-%d %H:%M:%S', time.localtime(time.time())))
-    keys = ["次数", "cpu利用率(%)", "所占内存(M)", "内存占用百分比(%)"]
+    keys = ["次数", "当前机器cpu利用率(%)", "进程所占内存(M)", "进程内存占用百分比(%)","当前机器显存（M）","当前显存百分比（%）","GPU利用率"]
+    p = psutil.Process(pid)
     row = 0
     lines = [keys]
     open(file_dir_path + "log.txt", "w")
     while True:
-        if check_exsit("chrome.exe") and row < 5: #指定进程名 & 获取次数
+        if check_exsit("Chrome.exe") and row < 500: #指定进程名 & 获取次数
             row += 1
-            cpu_percent = p.cpu_percent() / 6
+            
+            
+            #cpu_percent = p.cpu_percent() #进程统计的是单核利用率，不便于显示，除以cpu数量后误差体感较大
+            cpu_percent = psutil.cpu_percent()
             
             men_info = p.memory_info().rss / 1024 / 1024
             mem_percent = p.memory_percent()
             
             
-            #gpu_used, gpu_util, gpu_load = get_gpu_info()#笔记本无显卡，跳过
+            gpu_used, gpu_util, gpu_load = get_gpu_info()#笔记本无显卡，跳过
             
-            values = [row, cpu_percent, round(men_info, 2), round(mem_percent, 2)]
+            values = [row, cpu_percent, round(men_info, 2), round(mem_percent, 2), round(gpu_used, 2),round(gpu_util, 2), round(gpu_load, 2)]
             #, round(gpu_used, 2),round(gpu_util, 2), round(gpu_load, 2) values参数存放
             lines.append(values)
             # GPUtil.showUtilization()
-            print(row)
+            
             with open(file_dir_path + "log.txt", "a+") as f:
                 f.write(str(values)+"\n")
             time.sleep(interval)
@@ -152,9 +200,9 @@ def get_report(data, data2=None):
  
 def main():
     try:
-        pid = ntid("chrome.exe")
-        print(pid)
-        data1 = monitor_process(pid) #
+        pid = ntid("Chrome.exe")#进程名可以变量化
+        
+        data1 = monitor_process(pid,0.5) #
         
         
         
