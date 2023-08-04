@@ -1,0 +1,78 @@
+from collections import Counter
+import os
+from PIL import Image
+from PIL import ImageChops
+import uuid
+
+def black_or_b(a, b):
+
+    diff = ImageChops.difference(a, b)
+
+    diff = diff.convert('L')
+
+    
+
+    new = diff.convert('RGB')
+
+    new.paste(b, mask=diff)
+
+    return new
+
+def compare_images(imagepath1, imagepath2,offset=None):
+    """
+        比较图片，返回差异图url
+        @参数一: url1: 第一张图片的url
+        @参数二: url2: 第二张图片的url
+        """
+
+
+
+    try:
+        resultImagePath = str(uuid.uuid1()) + ".jpg"
+        image_one = Image.open(imagepath1)
+        image_two = Image.open(imagepath2)
+
+        diff = ImageChops.difference(image_one, image_two)
+        diff = diff.convert("RGB")
+
+        if offset != None:
+            px = diff.load()
+            w, h = diff.size
+            for i in range(w):
+                for j in range(h):
+                    if px[i, j] != (0, 0, 0):
+                        #超过允许的偏移值 就视为差异
+                        if px[i, j][0] > offset or px[i, j][1] > offset or px[i, j][2] > offset:
+                            px[i, j] = (255, 0, 0)
+                        else:
+                            px[i, j] = (0, 0, 0)
+
+        similarity = round((Counter(diff.getdata()).get((0, 0, 0)) / (diff.size[0] * diff.size[1])) * 100, 2)
+        c=black_or_b(image_one,image_two)
+        #diff.save(resultImagePath)
+        c.save(resultImagePath)
+
+        #os.remove(imagepath1) #删除图片
+        #os.remove(imagepath2)
+        #os.remove(resultImagePath)
+
+        print(similarity)
+        return resultImagePath, similarity
+    except Exception as e:
+        print(e)
+        return None
+
+image1="D:/自动化整理/test/img1.jpg"
+image2="D:/自动化整理/test/img2.jpg"
+file_dir_path="D:/自动化整理/test/"
+def main():
+    try:
+        compare_images(image1,image2,)
+    except Exception as e:
+        print(e)
+        with open(file_dir_path + "main_error.log", "a+") as f:
+            f.write(str(e))
+ 
+ 
+if __name__ == "__main__":
+    main()
